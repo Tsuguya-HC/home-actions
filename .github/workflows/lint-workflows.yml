@@ -15,6 +15,7 @@ on:
     inputs:
       aqua-version:
         type: string
+        # renovate: datasource=github-releases depName=aquaproj/aqua
         default: v2.62.3
       zizmor-version:
         description: >
@@ -22,12 +23,17 @@ on:
           action の digest 更新と同じ PR で動かすこと（別々に上げると
           "Unknown version" で落ちる）。
         type: string
+        # renovate: datasource=github-releases depName=zizmorcore/zizmor
         default: "1.29.0"
 
 permissions: {}
 
 jobs:
   actionlint:
+    # Named so this repository passes the pedantic level it imposes on its
+    # callers; the string matches the job id, so the check name callers see is
+    # unchanged.
+    name: actionlint
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -58,6 +64,10 @@ jobs:
           actionlint -no-color
 
   zizmor:
+    # Named so this repository passes the pedantic level it imposes on its
+    # callers; the string matches the job id, so the check name callers see is
+    # unchanged.
+    name: zizmor
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

@@ -35,3 +35,15 @@ SARIF と同じで、違うのは読み方だけ（注釈は `::error:: file:lin
 になる。個別ジョブ名を必須チェックに登録していると、ここで名前を変えた瞬間に
 その context が報告されなくなり、全 PR が "Waiting for status to be reported"
 で永久にブロックされる。
+
+## 中央化できていない部分
+
+`zizmor` は `zizmor-action` の digest と `zizmor-version` 入力の両方をここが持っているので、更新はここだけで起きる。
+
+**`actionlint` は違う。** `lint-workflows.yml` の `aqua i` が読むのは
+「チェックアウトされているリポジトリの `aqua.yaml`」＝**呼び出し側**なので、
+`rhysd/actionlint` のピンは呼び出し側5箇所（+ 自己呼び出し用にここ）に残っている。
+現時点では全て `v1.7.12` で揃っているが、構造としては再び割れうる。
+
+寄せるなら、`lint-workflows.yml` が home-actions 自身を別ディレクトリに
+チェックアウトして `AQUA_GLOBAL_CONFIG` をそちらへ向ける必要がある。

@@ -1,0 +1,61 @@
+name: CI
+
+# This repository had no CI at all, which is the wrong shape for the one place
+# six other repositories resolve their lint tooling from: a change here reaches
+# all of them the moment any of them bumps the pinned SHA, and until now nothing
+# checked it first.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  # Local ref, not a pinned one: a pull request here has to be linted by its own
+  # version of the reusable workflow, because that workflow is the change under
+  # review. Pinning to a SHA would test whatever is already on main and pass a
+  # PR that breaks it.
+  lint-workflows:
+    uses: ./.github/workflows/lint-workflows.yml
+    # Required, and not inherited: the workflow-level `permissions: {}` above
+    # would cap the called jobs below the `contents: read` they ask for, and
+    # the run fails at startup rather than at a step. The callers all pass the
+    # same thing.
+    permissions:
+      contents: read
+
+  # The only required status check, matching the callers. Aggregating here means
+  # the ruleset never names an individual job, so renaming or splitting one
+  # cannot leave a required context that is never reported.
+  gate:
+    name: CI Gate
+    needs: [lint-workflows]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Aggregate results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "Results: ${RESULTS}"
+          # fail-closed: an empty needs list would make the loop pass vacuously
+          if [ -z "${RESULTS// /}" ]; then
+            echo "::error::No job results to aggregate (empty needs) — failing closed."
+            exit 1
+          fi
+          for r in ${RESULTS}; do
+            case "${r}" in
+              success|skipped) ;;
+              *) echo "::error::A required job concluded with: ${r}"; exit 1 ;;
+            esac
+          done

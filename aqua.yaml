@@ -1,0 +1,26 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/aqua-yaml.json
+#
+# lint-workflows.yml installs actionlint with `aqua i`, which reads the
+# aqua.yaml of whichever repository is checked out — the caller's, normally.
+# This repository calls that workflow on itself, so it needs its own copy or
+# the actionlint job fails with "command not found" (which is exactly how it
+# failed the first time CI ran here).
+#
+# Keep rhysd/actionlint at the same version as the callers'. It is pinned in
+# five places rather than one because the shared workflow resolves it from the
+# caller, not from here — see the note in README.md.
+checksum:
+  enabled: true
+  # Fail rather than fall back to "just download it" when a checksum is missing.
+  require_checksum: true
+  # CI is linux/amd64; recording other platforms would only pad the lock file.
+  supported_envs:
+    - linux/amd64
+
+registries:
+  - type: standard
+    ref: v4.552.0 # renovate: depName=aquaproj/aqua-registry
+
+packages:
+  - name: rhysd/actionlint@v1.7.12
