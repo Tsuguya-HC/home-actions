@@ -78,3 +78,8 @@ jobs:
           # public/private で呼び出し側の権限を分ける必要もなくなる。
           advanced-security: "false"
           annotations: "true"
+          # 既定の regular は 6 リポで指摘ゼロになってしまい、実質何も強制しない。
+          # pedantic まで上げると concurrency の欠落・権限の無説明・
+          # template 展開が出る。auditor との差は secrets-outside-env 1 件だけで、
+          # 上げても ignore が要るものは無い（全リポで実測して確認済み）。
+          persona: pedantic
