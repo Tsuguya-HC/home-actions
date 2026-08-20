@@ -1,0 +1,85 @@
+name: Lint workflows
+
+# 6 リポジトリ（home-cluster / home-infra / home-cloudflare / home-harbor /
+# home-trading / home-rss）で同じ lint を回していたものを 1 箇所に寄せたもの。
+#
+# 寄せた理由は PR の数ではなく **drift**。抽出前の時点で actionlint が 4 通り、
+# zizmor が 4 通りに分かれており、kubeconform に至ってはバージョンが
+# v0.7.0 と v0.8.0 で割れていた。ツールのピンが 6 箇所にあると必ずこうなる。
+#
+# 呼び出し側は必須チェックを `CI Gate` 1 個に集約していること。
+# ジョブ名を個別に必須化していると、ここで名前を変えた瞬間に
+# 全 PR が "Waiting for status to be reported" で止まる。
+on:
+  workflow_call:
+    inputs:
+      advanced-security:
+        description: >
+          SARIF を Code Scanning に上げるか。public リポは true、
+          private は Advanced Security が無いので false にして注釈で出す。
+          呼び出し側は true のとき security-events: write を渡すこと。
+        type: boolean
+        default: false
+      aqua-version:
+        type: string
+        default: v2.62.3
+      zizmor-version:
+        description: >
+          zizmor-action の support/versions に載っている版しか使えない。
+          action の digest 更新と同じ PR で動かすこと（別々に上げると
+          "Unknown version" で落ちる）。
+        type: string
+        default: "1.29.0"
+
+permissions: {}
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: aquaproj/aqua-installer@96a9bc20066c5bf5e275b41019cfc165b25f4e2e # v4.0.5
+        with:
+          aqua_version: ${{ inputs.aqua-version }}
+          # 既定の `-l` はリンクを張るだけで実体を落とさない。取得は後段の
+          # run: で起きるが、そこには GITHUB_TOKEN が無く未認証になる。
+          # ダウンロードを token のあるこのステップに寄せる。
+          aqua_opts: ""
+
+      - name: Lint workflows
+        run: |
+          set -euo pipefail
+          # actionlint は shellcheck が無いと run: ブロックの検査を黙って飛ばす。
+          # runner イメージから消えたときに「緑だが何も見ていない」に落ちないよう、
+          # 存在確認で fail-closed にする。
+          command -v shellcheck >/dev/null || {
+            echo "::error::shellcheck is not on the runner; actionlint would skip every run: block"
+            exit 1
+          }
+          actionlint -no-color
+
+  zizmor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # public リポの SARIF アップロードに要る。private の呼び出し元は
+      # これを渡さず advanced-security: false を指定する。
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          version: ${{ inputs.zizmor-version }}
+          advanced-security: ${{ inputs.advanced-security }}
+          # advanced-security と同時に true にはできない（action 側が弾く）。
+          annotations: ${{ !inputs.advanced-security }}
