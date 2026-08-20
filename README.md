@@ -20,13 +20,12 @@ jobs:
     uses: Tsuguya/home-actions/.github/workflows/lint-workflows.yml@<sha>
     permissions:
       contents: read
-    # public リポジトリなら SARIF を上げる
-    # with:
-    #   advanced-security: true
-    # permissions:
-    #   contents: read
-    #   security-events: write
 ```
+
+public / private で分岐しない。zizmor は SARIF ではなく注釈で出すので
+`security-events: write` は要らない。指摘があれば job が赤くなる点は
+SARIF と同じで、違うのは読み方だけ（注釈は `::error:: file:line message`
+としてログに直接出る）。
 
 ## 呼び出し側の前提
 

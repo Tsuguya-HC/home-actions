@@ -13,13 +13,6 @@ name: Lint workflows
 on:
   workflow_call:
     inputs:
-      advanced-security:
-        description: >
-          SARIF を Code Scanning に上げるか。public リポは true、
-          private は Advanced Security が無いので false にして注釈で出す。
-          呼び出し側は true のとき security-events: write を渡すこと。
-        type: boolean
-        default: false
       aqua-version:
         type: string
         default: v2.62.3
@@ -69,9 +62,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      # public リポの SARIF アップロードに要る。private の呼び出し元は
-      # これを渡さず advanced-security: false を指定する。
-      security-events: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -80,6 +70,11 @@ jobs:
       - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
           version: ${{ inputs.zizmor-version }}
-          advanced-security: ${{ inputs.advanced-security }}
-          # advanced-security と同時に true にはできない（action 側が弾く）。
-          annotations: ${{ !inputs.advanced-security }}
+          # SARIF ではなく注釈で出す。どちらも指摘があれば job は赤になる
+          # （action は zizmor の終了コードをそのまま返す）ので fail-closed 性は同じ。
+          # 違うのは読み方で、注釈は `::error:: file:line message` としてログに
+          # 直接出るぶん、CI を読むのが人でもエージェントでも扱いやすい。
+          # SARIF を捨てると security-events: write が要らなくなり、
+          # public/private で呼び出し側の権限を分ける必要もなくなる。
+          advanced-security: "false"
+          annotations: "true"
