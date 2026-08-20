@@ -24,6 +24,12 @@ jobs:
   # PR that breaks it.
   lint-workflows:
     uses: ./.github/workflows/lint-workflows.yml
+    # Required, and not inherited: the workflow-level `permissions: {}` above
+    # would cap the called jobs below the `contents: read` they ask for, and
+    # the run fails at startup rather than at a step. The callers all pass the
+    # same thing.
+    permissions:
+      contents: read
 
   # The only required status check, matching the callers. Aggregating here means
   # the ruleset never names an individual job, so renaming or splitting one
