@@ -51,7 +51,11 @@ jobs:
   gate:
     name: CI Gate
     needs: [lint-workflows, lint-renovate, lint-aqua]
-    if: ${{ always() }}
+    # `!cancelled()` rather than `always()`: under always(), cancelling a run
+    # leaves every leaf reporting `cancelled`, which falls through the case
+    # below and records the required check as a failure. A cancelled run has no
+    # verdict to give, so the gate should be skipped along with it.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
