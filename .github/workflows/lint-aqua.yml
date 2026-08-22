@@ -1,0 +1,72 @@
+name: Lint aqua checksums
+
+# `aqua-checksums.json` が `aqua.yaml` と一致していることを検査する。
+#
+# aqua.yaml は require_checksum: true なので、checksum の無いものは
+# インストールされない。バージョンが動いたら checksum も追従させる必要があり、
+# それはクラスタ側の aqua-checksum ワークフローが Renovate の PR ブランチに
+# コミットして直す。本ワークフローはその**検出**側で、直っていなければ赤にする。
+#
+# ズレには 2 種類あり、片方は `aqua i` だけでは捕まらない（実測）:
+#
+#   パッケージ版のズレ   aqua i が `checksum is required` で exit 1
+#   registry ref のズレ  aqua が実行時に aqua-checksums.json へ自分で追記し、
+#                        exit 0 で素通りする
+#
+# 後者があるので `aqua i` の後に git の差分を見る。追記が起きたということは
+# コミットされている checksum が古かったということ。
+#
+# lint-workflows.yml と違い AQUA_CONFIG は設定しない。ここで検証したいのは
+# **呼び出し側の** aqua.yaml と checksum の一致であって、こちらのツールのピン
+# ではない。
+on:
+  workflow_call:
+    inputs:
+      aqua-version:
+        type: string
+        # renovate: datasource=github-releases depName=aquaproj/aqua
+        default: v2.62.3
+
+permissions: {}
+
+jobs:
+  aqua-checksums:
+    name: aqua checksums
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # 設定が無いリポで「何も検証せず緑」にならないよう fail-closed にする。
+      - name: Require an aqua config
+        run: |
+          set -euo pipefail
+          [ -f aqua.yaml ] || {
+            echo "::error::aqua.yaml not found; this workflow would pass without checking anything"
+            exit 1
+          }
+          [ -f aqua-checksums.json ] || {
+            echo "::error::aqua-checksums.json not found while aqua.yaml exists"
+            exit 1
+          }
+
+      - uses: aquaproj/aqua-installer@96a9bc20066c5bf5e275b41019cfc165b25f4e2e # v4.0.5
+        with:
+          aqua_version: ${{ inputs.aqua-version }}
+          # 既定の `-l` はリンクを張るだけで実体を落とさない。落とさなければ
+          # checksum も検証されないので、ここでは実インストールさせる。
+          aqua_opts: ""
+
+      - name: Check the checksums are in step with aqua.yaml
+        run: |
+          set -euo pipefail
+          # aqua i は上のステップが済ませている。追記が起きていないかだけ見る。
+          if ! git diff --exit-code -- aqua-checksums.json; then
+            echo "::error::aqua-checksums.json is out of step with aqua.yaml. aqua rewrote it during install, which means the committed file was stale. Run 'aqua update-checksum --prune' and commit, or wait for the cluster-side aqua-checksum workflow to push it."
+            exit 1
+          fi
+          echo "aqua-checksums.json is in step with aqua.yaml"
