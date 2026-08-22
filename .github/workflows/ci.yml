@@ -38,12 +38,19 @@ jobs:
     permissions:
       contents: read
 
+  # And an aqua.yaml of its own, which is now the single source of actionlint's
+  # pin for every caller — so a stale checksum here breaks all of them.
+  lint-aqua:
+    uses: ./.github/workflows/lint-aqua.yml
+    permissions:
+      contents: read
+
   # The only required status check, matching the callers. Aggregating here means
   # the ruleset never names an individual job, so renaming or splitting one
   # cannot leave a required context that is never reported.
   gate:
     name: CI Gate
-    needs: [lint-workflows, lint-renovate]
+    needs: [lint-workflows, lint-renovate, lint-aqua]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
