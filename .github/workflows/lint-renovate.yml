@@ -1,0 +1,67 @@
+name: Lint renovate config
+
+# Renovate 設定そのものの検証。`lint-workflows.yml` とは別ファイルにしてある。
+# あちらは actionlint / zizmor でワークフローを見るためのもので、対象が違う。
+#
+# 分けている実利もある。呼び出し側は `paths` フィルタを使えない（必須チェックが
+# 報告されず永久ブロックになる）ので、どちらのジョブも常に起動する。同居させると
+# Dockerfile だけの PR でも Renovate 設定を読みに行くことになり、失敗したときに
+# どちらのリンタが何を言っているのか読み分けづらい。
+#
+# 検証が要る理由は体裁ではない。Renovate は**知らないキーを黙って捨てる**。
+# home-cluster は `ignoredAuthors`（正しくは `gitIgnoredAuthors`）を 5 週間置いて
+# いたが、PR も警告も出ないので誰も気づかなかった。バリデータだけが検出できる。
+on:
+  workflow_call:
+    inputs:
+      renovate-version:
+        description: >
+          クラスタで実際に動いている Renovate と揃えること
+          (manifests/argo/renovate.yaml)。バージョンがずれると、
+          こちらが通しても本番が別の解釈をする余地が残る。
+        type: string
+        # renovate: datasource=docker depName=ghcr.io/renovatebot/renovate
+        default: "44.31.0"
+
+permissions: {}
+
+jobs:
+  renovate-config:
+    name: renovate config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # private リポの checkout に必須。`permissions: {}` はスコープ無しの
+      # GITHUB_TOKEN を渡すのであって「トークン無し」ではなく、private では
+      # clone が exit 128 で落ちる。public だと匿名読みで通るので差が出にくい。
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate renovate config
+        env:
+          RENOVATE_VERSION: ${{ inputs.renovate-version }}
+        run: |
+          set -euo pipefail
+
+          # バリデータは既定の場所を勝手に探す。設定が無いリポでは「何も検証せず
+          # 緑」になるので、ファイルの存在を先に確かめて fail-closed にする。
+          found=""
+          for f in renovate.json renovate.json5 renovate.jsonc \
+                   .renovaterc .renovaterc.json .renovaterc.json5 \
+                   .github/renovate.json .github/renovate.json5 \
+                   .gitlab/renovate.json; do
+            [ -f "$f" ] && { found="$f"; break; }
+          done
+          if [ -z "$found" ]; then
+            echo "::error::no Renovate config found; this workflow would pass without validating anything"
+            exit 1
+          fi
+          echo "validating $found with renovate@${RENOVATE_VERSION}"
+
+          # --strict は設定エラーに加えて「マイグレーションが必要な状態」でも
+          # 落とす。非推奨の綴りを放置すると configMigration が PR を出してきて
+          # 整形済みのファイルを書き戻すので、こちら側で先に潰しておく。
+          npx --yes --package "renovate@${RENOVATE_VERSION}" renovate-config-validator --strict

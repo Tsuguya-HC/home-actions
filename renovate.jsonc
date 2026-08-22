@@ -21,8 +21,11 @@
         "exist is that pins drift when nobody owns them."
       ],
       "customType": "regex",
+      // Every reusable workflow here, not just lint-workflows.yml: lint-renovate.yml
+      // pins the Renovate version the same way, and scoping this to one filename is
+      // how the next one would end up unmaintained.
       "managerFilePatterns": [
-        "/^\\.github/workflows/lint-workflows\\.yml$/"
+        "/^\\.github/workflows/.+\\.ya?ml$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+default: \"?(?<currentValue>[^\"\\s]+)\"?"
