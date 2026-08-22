@@ -1,0 +1,14 @@
+# actionlint v1.7.12（現時点の最新）は job context の workflow_sha を
+# 「未定義プロパティ」として誤検知する。実際には GitHub Actions で有効で、
+# reusable workflow が「自身が解決された commit」を知る唯一の手段。
+# lint-workflows.yml がツール設定を取ってくる ref に使っている。
+#
+# 上流: rhysd/actionlint#647（job.workflow_sha 等の未対応、修正 PR #696）。
+# 対応リリースが出たらこのファイルごと消す。
+#
+# 呼び出し側リポジトリには不要。actionlint が検査するのは呼び出し側の
+# ワークフローで、そこに job.workflow_sha は現れないため。
+paths:
+  .github/workflows/lint-workflows.yml:
+    ignore:
+      - 'property "workflow_sha" is not defined'
