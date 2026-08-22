@@ -38,9 +38,40 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+    env:
+      # ツールのピンは呼び出し側ではなくここのものを使う。下の sparse-checkout で
+      # 取ってくる aqua.yaml を指す。
+      AQUA_CONFIG: _tooling/aqua.yaml
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout caller repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
+
+      # actionlint のピンをここ 1 箇所に寄せる。
+      #
+      # `aqua i` は既定で「チェックアウトされているリポジトリの aqua.yaml」を読む。
+      # そのため actionlint のピンだけが呼び出し側 6 箇所に散っていた（zizmor は
+      # action の digest も version 入力もこのファイルが持っているのに）。実害も
+      # 出ていて、aqua.yaml を持たないリポが新たにこのワークフローを呼ぶと
+      # actionlint が PATH に無いまま `exit 127` だけ出して死ぬ
+      # （talos-custom-build と、このリポ自身の初回がそれ）。
+      #
+      # ref は job.workflow_sha =「この reusable workflow が解決された commit」。
+      # 呼び出し側が `@<sha>` でピンした版とツール設定が同一 commit で凍結される。
+      #
+      # sparse-checkout で設定 2 ファイルだけ取る。ワークフローまで持ってくると
+      # actionlint が home-actions 自身の .github/workflows も検査対象にしてしまう。
+      - name: Checkout lint tooling config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Tsuguya/home-actions
+          ref: ${{ job.workflow_sha }}
+          sparse-checkout: |
+            aqua.yaml
+            aqua-checksums.json
+          sparse-checkout-cone-mode: false
+          path: _tooling
           persist-credentials: false
 
       - uses: aquaproj/aqua-installer@96a9bc20066c5bf5e275b41019cfc165b25f4e2e # v4.0.5

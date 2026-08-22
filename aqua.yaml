@@ -1,15 +1,15 @@
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/aqua-yaml.json
 #
-# lint-workflows.yml installs actionlint with `aqua i`, which reads the
-# aqua.yaml of whichever repository is checked out — the caller's, normally.
-# This repository calls that workflow on itself, so it needs its own copy or
-# the actionlint job fails with "command not found" (which is exactly how it
-# failed the first time CI ran here).
+# The single source for actionlint's pin, for every repository that calls
+# lint-workflows.yml.
 #
-# Keep rhysd/actionlint at the same version as the callers'. It is pinned in
-# five places rather than one because the shared workflow resolves it from the
-# caller, not from here — see the note in README.md.
+# It used to be resolved from the caller — `aqua i` reads the aqua.yaml of
+# whichever repository is checked out — so the pin lived in six places and a
+# caller without an aqua.yaml got a bare `exit 127` with no diagnostic.
+# lint-workflows.yml now sparse-checks-out this file at job.workflow_sha and
+# points AQUA_CONFIG at it, so the workflow and the tool it runs are frozen at
+# the same commit as whatever SHA the caller pinned.
 checksum:
   enabled: true
   # Fail rather than fall back to "just download it" when a checksum is missing.

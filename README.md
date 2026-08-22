@@ -40,10 +40,23 @@ SARIF と同じで、違うのは読み方だけ（注釈は `::error:: file:lin
 
 `zizmor` は `zizmor-action` の digest と `zizmor-version` 入力の両方をここが持っているので、更新はここだけで起きる。
 
-**`actionlint` は違う。** `lint-workflows.yml` の `aqua i` が読むのは
-「チェックアウトされているリポジトリの `aqua.yaml`」＝**呼び出し側**なので、
-`rhysd/actionlint` のピンは呼び出し側5箇所（+ 自己呼び出し用にここ）に残っている。
-現時点では全て `v1.7.12` で揃っているが、構造としては再び割れうる。
+**`actionlint` も寄せた（v1.1.0〜）。** 以前は `aqua i` が読むのが
+「チェックアウトされているリポジトリの `aqua.yaml`」＝**呼び出し側**だったため、
+`rhysd/actionlint` のピンが呼び出し側6箇所に散っていた。
 
-寄せるなら、`lint-workflows.yml` が home-actions 自身を別ディレクトリに
-チェックアウトして `AQUA_GLOBAL_CONFIG` をそちらへ向ける必要がある。
+現在は `lint-workflows.yml` が `job.workflow_sha`（この reusable workflow が
+解決された commit）でこのリポジトリの `aqua.yaml` / `aqua-checksums.json` だけを
+sparse-checkout し、`AQUA_CONFIG` をそちらへ向けている。**呼び出し側がピンした
+SHA と、そこで動く actionlint の版が同一 commit で凍結される。**
+
+sparse-checkout にしているのは、ワークフローまで持ってくると actionlint が
+home-actions 自身の `.github/workflows` も検査対象にしてしまうため。
+
+### 呼び出し側に aqua.yaml は要らなくなった
+
+`rhysd/actionlint` だけを宣言していたリポジトリは `aqua.yaml` と
+`aqua-checksums.json` ごと削除できる。他のツール（kubeconform / talhelper 等）を
+持つリポジトリは、その行だけ残せばよい。
+
+以前はこの前提を知らずに新しい呼び出し側を足すと、actionlint が PATH に無いまま
+`exit 127` だけ出して死んだ（talos-custom-build と、このリポ自身の初回がそれ）。
