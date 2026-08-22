@@ -31,12 +31,19 @@ jobs:
     permissions:
       contents: read
 
+  # Same local-ref reasoning: this repository has a renovate.jsonc of its own,
+  # so it validates it through the workflow it hands to everyone else.
+  lint-renovate:
+    uses: ./.github/workflows/lint-renovate.yml
+    permissions:
+      contents: read
+
   # The only required status check, matching the callers. Aggregating here means
   # the ruleset never names an individual job, so renaming or splitting one
   # cannot leave a required context that is never reported.
   gate:
     name: CI Gate
-    needs: [lint-workflows]
+    needs: [lint-workflows, lint-renovate]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
