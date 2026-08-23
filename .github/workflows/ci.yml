@@ -4,25 +4,93 @@ name: CI
 # six other repositories resolve their lint tooling from: a change here reaches
 # all of them the moment any of them bumps the pinned SHA, and until now nothing
 # checked it first.
+#
+# 必須ステータスチェックを単一 gate に集約するオーケストレーター。
+# ruleset に登録する必須チェックは末尾の `CI Gate` 1 個。
+#
+# トリガーに paths フィルタは付けない。leaf をトリガー側で絞ると、該当しない
+# PR ではチェックが報告されず、必須化された context が
+# "Expected — Waiting for status to be reported" のまま永久にブロックする。
+# 代わりに起動は常にして、`detect` が leaf ごとの実行要否を出す。skip した
+# leaf は gate から見て `skipped` = 合格扱いになるので、報告は常に発生する。
+#
+# push トリガーは持たない。main は ruleset で直 push を禁じており PR 経由で
+# しか更新されない（= マージ時点で CI Gate 通過済み）ため push CI は冗長。
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+    # `edited` on top of the default opened/synchronize/reopened. Changing a
+    # PR's base is an `edited` activity, so a PR opened against another branch
+    # and later retargeted at main never matched `branches:` and never produced
+    # a CI Gate check at all — the required context stays "Expected — Waiting
+    # for status to be reported" and the PR cannot merge until someone pushes
+    # to it.
+    #
+    # detect を入れたことで塞ぐものが 1 つ増えた。retarget では head SHA が
+    # 変わらないので、`edited` が無いと旧 base で計算した detect の結果
+    # （= leaf を skip した緑）がそのまま新 base の必須チェックに流用できる。
+    types: [opened, synchronize, reopened, edited]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.number }}
+  cancel-in-progress: true
 
 permissions: {}
 
 jobs:
+  # 変更ファイル種別を判定し、各 leaf を実行すべきかを outputs で返す。
+  # merge-base 等のエッジケースを正しく扱うため dorny/paths-filter を使う。
+  #
+  # このリポジトリの leaf は「他 6 リポに配る reusable workflow そのもの」なので、
+  # フィルタは各 leaf が検査する対象と、その leaf 自身のファイルを名指しする。
+  #
+  # aqua.yaml は 2 か所に現れる。lint-aqua はそれと checksum の整合を見るし、
+  # lint-workflows が使う actionlint / zizmor のピンもそこにある。前者は
+  # `aqua` フィルタで、後者は「aqua.yaml が動いたら actionlint も回す」という
+  # 意味で `workflows` にも入れてある。
+  detect:
+    name: detect changes
+    # checkout と paths-filter しか動かないので slim で足りる。
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # dorny/paths-filter が PR の変更ファイル一覧を API 取得するために必要
+    outputs:
+      workflows: ${{ steps.filter.outputs.workflows }}
+      renovate: ${{ steps.filter.outputs.renovate }}
+      aqua: ${{ steps.filter.outputs.aqua }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            workflows:
+              - '.github/workflows/**'
+              - '.github/zizmor.yml'
+              # actionlint / zizmor のピン元。動けば lint-workflows の中身が変わる。
+              - 'aqua.yaml'
+              - 'aqua-checksums.json'
+            renovate:
+              - 'renovate.json*'
+              - '.github/workflows/lint-renovate.yml'
+            aqua:
+              - 'aqua.yaml'
+              - 'aqua-checksums.json'
+              - '.github/workflows/lint-aqua.yml'
+
   # Local ref, not a pinned one: a pull request here has to be linted by its own
   # version of the reusable workflow, because that workflow is the change under
   # review. Pinning to a SHA would test whatever is already on main and pass a
   # PR that breaks it.
   lint-workflows:
+    needs: detect
+    if: ${{ needs.detect.outputs.workflows == 'true' }}
     uses: ./.github/workflows/lint-workflows.yml
     # Required, and not inherited: the workflow-level `permissions: {}` above
     # would cap the called jobs below the `contents: read` they ask for, and
@@ -34,6 +102,8 @@ jobs:
   # Same local-ref reasoning: this repository has a renovate.jsonc of its own,
   # so it validates it through the workflow it hands to everyone else.
   lint-renovate:
+    needs: detect
+    if: ${{ needs.detect.outputs.renovate == 'true' }}
     uses: ./.github/workflows/lint-renovate.yml
     permissions:
       contents: read
@@ -41,6 +111,8 @@ jobs:
   # And an aqua.yaml of its own, which is now the single source of actionlint's
   # pin for every caller — so a stale checksum here breaks all of them.
   lint-aqua:
+    needs: detect
+    if: ${{ needs.detect.outputs.aqua == 'true' }}
     uses: ./.github/workflows/lint-aqua.yml
     permissions:
       contents: read
@@ -48,15 +120,20 @@ jobs:
   # The only required status check, matching the callers. Aggregating here means
   # the ruleset never names an individual job, so renaming or splitting one
   # cannot leave a required context that is never reported.
+  #
+  # `detect` も needs に含める。detect が失敗すると全 leaf の `if` が偽になって
+  # skip され、skip は合格扱いなので、detect を見ていないと「何も検査していない
+  # 緑」が必須チェックを満たしてしまう。
   gate:
     name: CI Gate
-    needs: [lint-workflows, lint-renovate, lint-aqua]
+    needs: [detect, lint-workflows, lint-renovate, lint-aqua]
     # `!cancelled()` rather than `always()`: under always(), cancelling a run
     # leaves every leaf reporting `cancelled`, which falls through the case
     # below and records the required check as a failure. A cancelled run has no
     # verdict to give, so the gate should be skipped along with it.
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    # 集計は bash の for ループだけなので slim で足りる。
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions: {}
     steps:
@@ -77,3 +154,4 @@ jobs:
               *) echo "::error::A required job concluded with: ${r}"; exit 1 ;;
             esac
           done
+          echo "All required jobs passed or were correctly skipped."
