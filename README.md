@@ -17,7 +17,7 @@
 ```yaml
 jobs:
   lint:
-    uses: Tsuguya/home-actions/.github/workflows/lint-workflows.yml@<sha>
+    uses: Tsuguya-HC/home-actions/.github/workflows/lint-workflows.yml@<sha>
     permissions:
       contents: read
 ```
