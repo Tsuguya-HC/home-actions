@@ -93,10 +93,26 @@ jobs:
   # version of the reusable workflow, because that workflow is the change under
   # review. Pinning to a SHA would test whatever is already on main and pass a
   # PR that breaks it.
+  #
+  # zizmor 1.30 の self-repository は、この `./` を `$/` に書き換えろと言う（Low）。
+  # 従わないのは、その根拠がここに当たらないからと、従うと別の検査が消えるから。
+  #
+  #   * 根拠の側: `./` の危険は「runner のファイルシステムを見る」こと — 前段の
+  #     ステップが同じパスに別物を clone しておける。それはステップの composite
+  #     action の話で、job レベルの reusable workflow 呼び出しは GitHub が同じ
+  #     commit から解決する。checkout すら要らず、FS は見ていない。残る利点は
+  #     GitHub の fully-pinned ポリシー適合だけで、それは使っていない。
+  #   * 代償の側: actionlint は `$/` を知らない（rhysd/actionlint#711、最終
+  #     リリース 2026-03 で作者 inactive）。`$/` にすると呼び出しの形式エラーが
+  #     出るだけでなく、**reusable workflow の input 検証がまるごと消える** —
+  #     必須 input の欠落も、存在しない input 名も素通りする（実測）。
+  #
+  # ignore は行単位で置く。ファイル単位の設定で切ると、将来ここに
+  # `uses: ./my-action` のようなステップを足したときに黙って見逃す。
   lint-workflows:
     needs: detect
     if: ${{ needs.detect.outputs.workflows == 'true' }}
-    uses: ./.github/workflows/lint-workflows.yml
+    uses: ./.github/workflows/lint-workflows.yml # zizmor: ignore[self-repository]
     # Required, and not inherited: the workflow-level `permissions: {}` above
     # would cap the called jobs below the `contents: read` they ask for, and
     # the run fails at startup rather than at a step. The callers all pass the
@@ -109,7 +125,7 @@ jobs:
   lint-renovate:
     needs: detect
     if: ${{ needs.detect.outputs.renovate == 'true' }}
-    uses: ./.github/workflows/lint-renovate.yml
+    uses: ./.github/workflows/lint-renovate.yml # zizmor: ignore[self-repository]
     permissions:
       contents: read
 
@@ -118,7 +134,7 @@ jobs:
   lint-aqua:
     needs: detect
     if: ${{ needs.detect.outputs.aqua == 'true' }}
-    uses: ./.github/workflows/lint-aqua.yml
+    uses: ./.github/workflows/lint-aqua.yml # zizmor: ignore[self-repository]
     permissions:
       contents: read
 
