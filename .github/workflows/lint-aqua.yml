@@ -25,7 +25,7 @@ on:
       aqua-version:
         type: string
         # renovate: datasource=github-releases depName=aquaproj/aqua
-        default: v2.62.3
+        default: v2.63.0
 
 permissions: {}
 

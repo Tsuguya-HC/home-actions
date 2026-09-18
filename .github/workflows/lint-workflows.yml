@@ -16,7 +16,7 @@ on:
       aqua-version:
         type: string
         # renovate: datasource=github-releases depName=aquaproj/aqua
-        default: v2.62.3
+        default: v2.63.0
       zizmor-version:
         description: >
           zizmor-action の support/versions に載っている版しか使えない。
