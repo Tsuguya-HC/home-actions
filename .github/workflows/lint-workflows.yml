@@ -1,11 +1,5 @@
 name: Lint workflows
 
-# 各リポジトリで同じ lint を回していたものを 1 箇所に寄せたもの。
-#
-# 寄せた理由は PR の数ではなく **drift**。抽出前の時点で actionlint が 4 通り、
-# zizmor が 4 通りに分かれており、kubeconform に至ってはバージョンが
-# v0.7.0 と v0.8.0 で割れていた。ツールのピンが 6 箇所にあると必ずこうなる。
-#
 # 呼び出し側は必須チェックを `CI Gate` 1 個に集約していること。
 # ジョブ名を個別に必須化していると、ここで名前を変えた瞬間に
 # 全 PR が "Waiting for status to be reported" で止まる。
