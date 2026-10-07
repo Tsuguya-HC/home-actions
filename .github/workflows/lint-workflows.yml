@@ -1,7 +1,6 @@
 name: Lint workflows
 
-# 6 リポジトリ（home-cluster / home-infra / home-cloudflare / home-harbor /
-# home-trading / home-rss）で同じ lint を回していたものを 1 箇所に寄せたもの。
+# 各リポジトリで同じ lint を回していたものを 1 箇所に寄せたもの。
 #
 # 寄せた理由は PR の数ではなく **drift**。抽出前の時点で actionlint が 4 通り、
 # zizmor が 4 通りに分かれており、kubeconform に至ってはバージョンが
