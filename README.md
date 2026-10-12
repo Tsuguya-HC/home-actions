@@ -22,6 +22,14 @@ jobs:
       contents: read
 ```
 
+ワークフローは 3 本あり、どれも `contents: read` だけで呼ぶ。
+
+| ワークフロー | 検査するもの | 呼び出し側に要るもの |
+|---|---|---|
+| `lint-workflows.yml` | `.github/workflows` を actionlint と zizmor（pedantic）で | 無し（actionlint のピンはこのリポのものを使う） |
+| `lint-renovate.yml` | Renovate 設定を `renovate-config-validator --strict` で | Renovate 設定ファイル。無ければ「何も検証せず緑」を避けるため赤になる |
+| `lint-aqua.yml` | `aqua-checksums.json` が `aqua.yaml` と一致しているか | リポ直下の `aqua.yaml` と `aqua-checksums.json`。無ければ赤になる |
+
 public / private で分岐しない。zizmor は SARIF ではなく注釈で出すので
 `security-events: write` は要らない。指摘があれば job が赤くなる点は
 SARIF と同じで、違うのは読み方だけ（注釈は `::error:: file:line message`
@@ -36,7 +44,7 @@ SARIF と同じで、違うのは読み方だけ（注釈は `::error:: file:lin
 その context が報告されなくなり、全 PR が "Waiting for status to be reported"
 で永久にブロックされる。
 
-## 中央化できていない部分
+## ツールのピンの置き場所
 
 `zizmor` は `zizmor-action` の digest と `zizmor-version` 入力の両方をここが持っているので、更新はここだけで起きる。
 
@@ -56,7 +64,8 @@ home-actions 自身の `.github/workflows` も検査対象にしてしまうた�
 
 `rhysd/actionlint` だけを宣言していたリポジトリは `aqua.yaml` と
 `aqua-checksums.json` ごと削除できる。他のツール（kubeconform / talhelper 等）を
-持つリポジトリは、その行だけ残せばよい。
+持つリポジトリは、その行だけ残せばよい。ただし削除したリポジトリは
+`lint-aqua.yml` を呼ばないこと（検査対象が無いので赤になる）。
 
 以前はこの前提を知らずに新しい呼び出し側を足すと、actionlint が PATH に無いまま
 `exit 127` だけ出して死んだ（talos-custom-build と、このリポ自身の初回がそれ）。
