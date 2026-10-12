@@ -143,6 +143,77 @@ jobs:
     permissions:
       contents: read
 
+  # 呼び出し側に配るツールの版は workflow_call 入力の既定値で、それを追うのは
+  # renovate.jsonc の regex customManager だけ。注釈と `default:` の書き方が
+  # 正規表現から外れると（間に行を挟む、引用符を変える等）、その依存は Renovate
+  # から黙って消えるか、引用符込みの値として拾われて更新されなくなる。
+  # lint-renovate は設定の構文を見るだけで、この取りこぼしは検出しない。
+  renovate-pins:
+    name: renovate pin annotations
+    needs: detect
+    if: ${{ needs.detect.outputs.workflows == 'true' || needs.detect.outputs.renovate == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check every annotation is picked up by a custom manager
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, re, sys
+
+          src = pathlib.Path("renovate.jsonc").read_text()
+          # renovate.jsonc は行頭の // コメントしか持たない。
+          cfg = json.loads("\n".join(
+              l for l in src.splitlines() if not l.lstrip().startswith("//")))
+          managers = [m for m in cfg.get("customManagers", [])
+                      if m.get("customType") == "regex"]
+
+          def file_regex(p):
+              if not (len(p) > 1 and p.startswith("/") and p.endswith("/")):
+                  sys.exit(f"::error::unsupported managerFilePatterns entry: {p}")
+              return re.compile(p[1:-1])
+
+          annotation = re.compile(r"^\s*# renovate: ")
+          seen = bad = 0
+          for path in sorted(pathlib.Path(".github/workflows").glob("*.y*ml")):
+              rel, text = path.as_posix(), path.read_text()
+              lines = [i for i, l in enumerate(text.splitlines(), 1)
+                       if annotation.match(l)]
+              if not lines:
+                  continue
+              seen += len(lines)
+              # RE2 の名前付きグループ (?<n>) を Python の (?P<n>) に直す。
+              patterns = [re.compile(re.sub(r"\(\?<(?=[A-Za-z_])", "(?P<", s))
+                          for m in managers
+                          if any(file_regex(p).search(rel)
+                                 for p in m.get("managerFilePatterns", []))
+                          for s in m.get("matchStrings", [])]
+              values = {}
+              for pat in patterns:
+                  for mt in pat.finditer(text):
+                      values[text.count("\n", 0, mt.start()) + 1] = mt.group("currentValue")
+              for ln in lines:
+                  v = values.get(ln)
+                  if v is None:
+                      print(f"::error file={rel},line={ln}::no regex customManager in renovate.jsonc matches this annotation; Renovate will not update it")
+                      bad += 1
+                  elif not re.fullmatch(r"[0-9A-Za-z._+-]+", v):
+                      print(f"::error file={rel},line={ln}::the custom manager reads the version as {v!r}; Renovate cannot update a value like that")
+                      bad += 1
+          # fail-closed: 注釈が 1 つも見つからないのは、この検査側が壊れている。
+          if seen == 0:
+              sys.exit("::error::found no renovate annotations under .github/workflows")
+          if bad:
+              sys.exit(1)
+          print(f"all {seen} annotations are picked up by a custom manager")
+          PY
+
   # The only required status check, matching the callers. Aggregating here means
   # the ruleset never names an individual job, so renaming or splitting one
   # cannot leave a required context that is never reported.
@@ -152,7 +223,7 @@ jobs:
   # 緑」が必須チェックを満たしてしまう。
   gate:
     name: CI Gate
-    needs: [detect, lint-workflows, lint-renovate, lint-aqua]
+    needs: [detect, lint-workflows, lint-renovate, lint-aqua, renovate-pins]
     # `!cancelled()` rather than `always()`: under always(), cancelling a run
     # leaves every leaf reporting `cancelled`, which falls through the case
     # below and records the required check as a failure. A cancelled run has no
