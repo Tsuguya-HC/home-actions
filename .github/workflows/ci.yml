@@ -51,9 +51,10 @@ jobs:
   # フィルタは各 leaf が検査する対象と、その leaf 自身のファイルを名指しする。
   #
   # aqua.yaml は 2 か所に現れる。lint-aqua はそれと checksum の整合を見るし、
-  # lint-workflows が使う actionlint / zizmor のピンもそこにある。前者は
-  # `aqua` フィルタで、後者は「aqua.yaml が動いたら actionlint も回す」という
-  # 意味で `workflows` にも入れてある。
+  # lint-workflows が使う actionlint のピンもそこにある（zizmor のピンは
+  # lint-workflows.yml の入力既定値で、aqua.yaml には無い）。前者は `aqua`
+  # フィルタで、後者は「aqua.yaml が動いたら actionlint も回す」という意味で
+  # `workflows` にも入れてある。
   detect:
     name: detect changes
     # checkout と paths-filter しか動かないので slim で足りる。
@@ -78,7 +79,11 @@ jobs:
             workflows:
               - '.github/workflows/**'
               - '.github/zizmor.yml'
-              # actionlint / zizmor のピン元。動けば lint-workflows の中身が変わる。
+              # actionlint の設定。消すと lint-workflows.yml の job.workflow_sha が
+              # 赤になるが、ここに無いとその PR では actionlint が回らず CI Gate が
+              # 緑で通る。
+              - '.github/actionlint.yaml'
+              # actionlint のピン元。動けば lint-workflows の中身が変わる。
               - 'aqua.yaml'
               - 'aqua-checksums.json'
             renovate:
